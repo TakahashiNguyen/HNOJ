@@ -1,66 +1,78 @@
 int main()
 {
     __asm__ volatile(R"(
-        subq $32, %rsp
+        call index
+        jmp end
 
-        movq $0, %r8
+    index:
+        call read_int
 
-    .L_read_int_char:
-        movq $0, %rax
-        movq $0, %rdi
+        imulq $3, %r12
+
+        call print_int
+        ret
+
+    read_int:
+        subq $16, %rsp              # Bộ nhớ đệm đọc 1 byte trên Stack
+        movq $0, %r12               # Xóa sạch %r12 để tích lũy số mới
+
+    .L_read_loop:
+        movq $0, %rax               # sys_read
+        movq $0, %rdi               # stdin
         movq %rsp, %rsi
         movq $1, %rdx
         syscall
 
-        cmpq $0, %rax 
-        jle .L_done_read
+        cmpq $0, %rax
+        jle .L_read_done
 
         movzbq (%rsp), %rax
-        
         cmpb $10, %al
-        je .L_done_read
+        je .L_read_done
 
         cmpb $48, %al
-        jl .L_read_int_char
+        jl .L_read_loop
         cmpb $57, %al
-        jg .L_read_int_char
+        jg .L_read_loop
 
         subq $48, %rax
-        imulq $10, %r8              
-        addq %rax, %r8
+        imulq $10, %r12
+        addq %rax, %r12
+        jmp .L_read_loop
 
-        jmp .L_read_int_char
-    .L_done_read:
-        subq $32, %rsp              # Cấp phát 32 bytes trên Stack làm bộ nhớ đệm chuỗi xuất
+    .L_read_done:
+        addq $16, %rsp
+        ret
+
+    print_int:
+        subq $32, %rsp
+        movb $10, 31(%rsp)
+        leaq 31(%rsp), %rsi
         
-        movb $10, 31(%rsp)          # Đặt ký tự xuống dòng '\n' ở cuối vùng nhớ đệm
-        leaq 31(%rsp), %rsi         # %rsi làm con trỏ chạy, bắt đầu từ vị trí ký tự '\n'
-        
-        movq %r8, %rax              # Nạp số nguyên cần chia vào %rax
-        movq $10, %rcx              # %rcx đóng vai trò là bộ chia cố định (chia cho 10)
+        movq %r12, %rax
+        movq $10, %rcx
 
     .L_convert_loop:
-        decq %rsi                   # Dịch con trỏ lùi về phía trước 1 byte trên Stack
-        xorq %rdx, %rdx             # BẮT BUỘC: Xóa sạch %rdx về 0 trước khi thực hiện lệnh chia
-        divq %rcx                   # Thực hiện: %rax / 10
-                                    # Kết quả: Thương số nằm ở %rax, Số dư nằm ở %rdx
-        
-        addq $48, %rdx              # Chuyển số dư (0-9) thành ký tự ASCII số ('0'-'9')
-        movb %dl, (%rsi)            # Cất ký tự ASCII này vào vị trí con trỏ %rsi đang đứng
-        
-        testq %rax, %rax            # Kiểm tra xem thương số (%rax) đã bằng 0 chưa?
-        jnz .L_convert_loop         # Nếu thương chưa bằng 0, tiếp tục chia để lấy chữ số tiếp theo
+        decq %rsi
+        xorq %rdx, %rdx
+        divq %rcx
+        addq $48, %rdx
+        movb %dl, (%rsi)
+        testq %rax, %rax
+        jnz .L_convert_loop
 
-        # Tính toán độ dài (độ dài chuỗi = Địa chỉ kết thúc - Địa chỉ bắt đầu %rsi)
+        # Tính độ dài chuỗi
         leaq 32(%rsp), %rdx
-        subq %rsi, %rdx             # Độ dài chuỗi hợp lệ nằm trong %rdx
+        subq %rsi, %rdx
 
-        # Gọi sys_write(1, %rsi, %rdx) để bắn toàn bộ chuỗi số ra màn hình
-        movq $1, %rax               # syscall số 1 (sys_write)
-        movq $1, %rdi               # stdout (1)
-        syscall                     # Thực hiện in chuỗi số nguyên!
+        movq $1, %rax               # sys_write
+        movq $1, %rdi               # stdout
+        syscall
 
-        addq $32, %rsp              # Dọn dẹp 32 bytes bộ nhớ đệm xuất của Stack
+        addq $32, %rsp
+        ret
+
+    end:
     )");
 
     return 0;
