@@ -5,11 +5,43 @@ int main()
         jmp end
 
     index:
+        movq $0, %r8
+        movq $0, %r9
+
+    .L_exec:
         call read_int
 
-        imulq $3, %r12
+        call is_even
+
+        cmpq $0, %r12
+        je .L_case_odd
+
+        incq %r8
+        jmp .L_check_r1
+    .L_case_odd:
+        decq %r8
+
+    .L_check_r1:
+        incq %r9
+
+        cmpq $0, %r8
+        jne .L_exec
+
+        shrq $1, %r9
+
+        movq %r9, %r12
 
         call print_int
+
+        ret
+
+    is_even:
+        testq $1, %r12          
+
+        setz %al                
+
+        movq %rax, %r12
+
         ret
 
     read_int:
